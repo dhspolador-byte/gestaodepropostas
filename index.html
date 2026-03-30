@@ -1467,6 +1467,121 @@
     setTab("reg");
     el("reg_status").focus();
   }
+  
+  function printLista(){
+  const rows = window.__lastFilteredRows || [];
+
+  if (!rows.length){
+    toast("Sem dados para imprimir.", "warn");
+    return;
+  }
+
+  const filtro = el("lblFiltro")?.textContent || "Filtro: todos";
+  const agora = new Date().toLocaleString("pt-BR");
+
+  const linhas = rows.map(r => `
+    <tr>
+      <td>${escapeHtml(norm(getCell(r, COL.id) ?? ""))}</td>
+      <td>${escapeHtml(norm(getCell(r, COL.status) ?? ""))}</td>
+      <td>${escapeHtml(norm(getCell(r, COL.cliente) ?? ""))}</td>
+      <td>${escapeHtml(norm(getCell(r, COL.dataProposta) ?? ""))}</td>
+      <td>${escapeHtml(norm(getCell(r, COL.cidade) ?? ""))}/${escapeHtml(norm(getCell(r, COL.uf) ?? ""))}</td>
+      <td>${escapeHtml(norm(getCell(r, COL.equipamento) ?? ""))}</td>
+      <td style="text-align:right">${escapeHtml(moneyBR(parseMoney(getCell(r, COL.valorApresentado))))}</td>
+      <td>${escapeHtml(norm(getCell(r, COL.dataFechamento) ?? ""))}</td>
+      <td style="text-align:right">${escapeHtml(moneyBR(parseMoney(getCell(r, COL.valorFechado))))}</td>
+    </tr>
+  `).join("");
+
+  const html = `
+    <!doctype html>
+    <html lang="pt-br">
+    <head>
+      <meta charset="utf-8">
+      <title>Impressão da Lista</title>
+      <style>
+        body{
+          font-family: Arial, Helvetica, sans-serif;
+          margin: 24px;
+          color: #111;
+        }
+        h1{
+          margin: 0 0 8px;
+          font-size: 22px;
+        }
+        .meta{
+          margin-bottom: 18px;
+          font-size: 12px;
+          color: #444;
+          line-height: 1.5;
+        }
+        table{
+          width: 100%;
+          border-collapse: collapse;
+          font-size: 11px;
+        }
+        th, td{
+          border: 1px solid #ccc;
+          padding: 6px 8px;
+          vertical-align: top;
+        }
+        th{
+          background: #f3f3f3;
+          text-align: left;
+        }
+        @media print{
+          body{ margin: 12mm; }
+          .no-print{ display:none; }
+        }
+      </style>
+    </head>
+    <body>
+      <h1>Gestão de Propostas - Lista</h1>
+      <div class="meta">
+        <div><strong>Gerado em:</strong> ${escapeHtml(agora)}</div>
+        <div><strong>${escapeHtml(filtro)}</strong></div>
+        <div><strong>Total de registros:</strong> ${rows.length}</div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Status</th>
+            <th>Cliente</th>
+            <th>Data Proposta</th>
+            <th>Cidade/UF</th>
+            <th>Equipamento</th>
+            <th>Apresentada (R$)</th>
+            <th>Fechamento</th>
+            <th>Fechada (R$)</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${linhas}
+        </tbody>
+      </table>
+
+      <script>
+        window.onload = function(){
+          window.print();
+          window.onafterprint = function(){ window.close(); };
+        };
+      <\/script>
+    </body>
+    </html>
+  `;
+
+  const w = window.open("", "_blank", "width=1200,height=800");
+  if (!w){
+    toast("O navegador bloqueou a janela de impressão. Libere pop-ups.", "warn");
+    return;
+  }
+
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
+}
 
   function openNew(){
     resetRegistroForm();
@@ -1673,7 +1788,7 @@
   // Events
   el("btnAplicar").addEventListener("click", ()=>{ rebuildFilterOptions(); apply(); });
   el("btnLimpar").addEventListener("click", clearFilters);
-  el("btnPrintAll").addEventListener("click", ()=>window.print());
+  el("btnPrintAll").addEventListener("click", printLista);
   el("btnSearch").addEventListener("click", apply);
 
   el("btnCalIni").addEventListener("click", ()=>openPicker(el("dtIni")));
@@ -1734,6 +1849,7 @@
   resetRegistroForm();
   fillSelect("statusProp", STATUS_OPTIONS, "Todos");
   init();
+  
 </script>
 </body>
 </html>
