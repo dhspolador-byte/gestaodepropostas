@@ -1467,121 +1467,6 @@
     setTab("reg");
     el("reg_status").focus();
   }
-  
-  function printLista(){
-  const rows = window.__lastFilteredRows || [];
-
-  if (!rows.length){
-    toast("Sem dados para imprimir.", "warn");
-    return;
-  }
-
-  const filtro = el("lblFiltro")?.textContent || "Filtro: todos";
-  const agora = new Date().toLocaleString("pt-BR");
-
-  const linhas = rows.map(r => `
-    <tr>
-      <td>${escapeHtml(norm(getCell(r, COL.id) ?? ""))}</td>
-      <td>${escapeHtml(norm(getCell(r, COL.status) ?? ""))}</td>
-      <td>${escapeHtml(norm(getCell(r, COL.cliente) ?? ""))}</td>
-      <td>${escapeHtml(norm(getCell(r, COL.dataProposta) ?? ""))}</td>
-      <td>${escapeHtml(norm(getCell(r, COL.cidade) ?? ""))}/${escapeHtml(norm(getCell(r, COL.uf) ?? ""))}</td>
-      <td>${escapeHtml(norm(getCell(r, COL.equipamento) ?? ""))}</td>
-      <td style="text-align:right">${escapeHtml(moneyBR(parseMoney(getCell(r, COL.valorApresentado))))}</td>
-      <td>${escapeHtml(norm(getCell(r, COL.dataFechamento) ?? ""))}</td>
-      <td style="text-align:right">${escapeHtml(moneyBR(parseMoney(getCell(r, COL.valorFechado))))}</td>
-    </tr>
-  `).join("");
-
-  const html = `
-    <!doctype html>
-    <html lang="pt-br">
-    <head>
-      <meta charset="utf-8">
-      <title>Impressão da Lista</title>
-      <style>
-        body{
-          font-family: Arial, Helvetica, sans-serif;
-          margin: 24px;
-          color: #111;
-        }
-        h1{
-          margin: 0 0 8px;
-          font-size: 22px;
-        }
-        .meta{
-          margin-bottom: 18px;
-          font-size: 12px;
-          color: #444;
-          line-height: 1.5;
-        }
-        table{
-          width: 100%;
-          border-collapse: collapse;
-          font-size: 11px;
-        }
-        th, td{
-          border: 1px solid #ccc;
-          padding: 6px 8px;
-          vertical-align: top;
-        }
-        th{
-          background: #f3f3f3;
-          text-align: left;
-        }
-        @media print{
-          body{ margin: 12mm; }
-          .no-print{ display:none; }
-        }
-      </style>
-    </head>
-    <body>
-      <h1>Gestão de Propostas - Lista</h1>
-      <div class="meta">
-        <div><strong>Gerado em:</strong> ${escapeHtml(agora)}</div>
-        <div><strong>${escapeHtml(filtro)}</strong></div>
-        <div><strong>Total de registros:</strong> ${rows.length}</div>
-      </div>
-
-      <table>
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Status</th>
-            <th>Cliente</th>
-            <th>Data Proposta</th>
-            <th>Cidade/UF</th>
-            <th>Equipamento</th>
-            <th>Apresentada (R$)</th>
-            <th>Fechamento</th>
-            <th>Fechada (R$)</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${linhas}
-        </tbody>
-      </table>
-
-      <script>
-        window.onload = function(){
-          window.print();
-          window.onafterprint = function(){ window.close(); };
-        };
-      <\/script>
-    </body>
-    </html>
-  `;
-
-  const w = window.open("", "_blank", "width=1200,height=800");
-  if (!w){
-    toast("O navegador bloqueou a janela de impressão. Libere pop-ups.", "warn");
-    return;
-  }
-
-  w.document.open();
-  w.document.write(html);
-  w.document.close();
-}
 
   function openNew(){
     resetRegistroForm();
@@ -1785,10 +1670,100 @@
     }
   }
 
+  function getChartImageSafe(chart){
+    try{
+      if (!chart || typeof chart.toBase64Image !== "function") return "";
+      return chart.toBase64Image("image/png", 1);
+    }catch(e){ return ""; }
+  }
+
+  function getPrintFilterLabel(){
+    const raw = (el("lblFiltro")?.textContent || "Filtro: todos").trim();
+    return raw.replace(/^Filtro:\s*/i, "") || "todos";
+  }
+
+  function getPrintKpis(){
+    return {
+      total: el("miniTotal")?.textContent || "0",
+      apresentado: el("miniAp")?.textContent || "R$ 0,00",
+      fechado: el("miniFe")?.textContent || "R$ 0,00",
+      negociacao: el("miniNeg")?.textContent || "0",
+      conversao: el("miniConv")?.textContent || "0,00%"
+    };
+  }
+
+  function buildPrintShell(title, bodyHtml, totalRegistros){
+    const logoSrc = (bigLogo && bigLogo.src) ? bigLogo.src : (BIG_LOGO_FALLBACK || "");
+    return `<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <title>${escapeHtml(title)}</title>
+  <style>
+    :root{--brand:#F2B705;--text:#111827;--muted:#6b7280;--line:#e5e7eb;--soft:#f8fafc;--card:#ffffff;--shadow:0 10px 25px rgba(17,24,39,.08)}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter,Arial,Helvetica,sans-serif;color:var(--text);background:#eef2f7}
+    .page{max-width:1160px;margin:0 auto;padding:28px}.sheet{background:#fff;border:1px solid #e5e7eb;border-radius:22px;padding:28px;box-shadow:var(--shadow)}
+    .top{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;border-bottom:2px solid var(--brand);padding-bottom:16px;margin-bottom:18px}
+    .brand{display:flex;gap:16px;align-items:center}.brand img{max-height:72px;max-width:220px;object-fit:contain}
+    .title h1{margin:0;font-size:28px;line-height:1.1}.title .sub{margin-top:6px;color:var(--muted);font-size:13px}
+    .meta{text-align:right;font-size:12px;color:var(--muted);line-height:1.55;min-width:220px}
+    .filterBox{margin:16px 0 18px;padding:14px 16px;border:1px solid #fde68a;background:#fffdf5;border-radius:16px}
+    .filterBox .label{font-size:11px;font-weight:800;color:#92400e;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px}.filterBox .value{font-size:14px;font-weight:700;line-height:1.45}
+    .kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin:16px 0 18px}.kpi{border:1px solid var(--line);background:linear-gradient(180deg,#fff,#fafafa);border-radius:16px;padding:14px 14px 12px}.kpi .t{font-size:11px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.03em;margin-bottom:8px}.kpi .v{font-size:22px;font-weight:900}
+    .sectionTitle{font-size:15px;font-weight:900;margin:24px 0 12px}.charts{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:8px}.chartCard{border:1px solid var(--line);border-radius:18px;padding:14px;background:var(--card)}.chartCard h3{margin:0 0 12px;font-size:14px}.chartCard img{display:block;width:100%;height:auto;border-radius:12px;background:var(--soft)}
+    .tableWrap{margin-top:16px;border:1px solid var(--line);border-radius:18px;overflow:hidden}table{width:100%;border-collapse:collapse}thead th{background:#fff8db;color:#7c5b00;font-size:11px;text-transform:uppercase;letter-spacing:.03em}th,td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:left;font-size:12px;vertical-align:top}td.money, th.money{text-align:right;white-space:nowrap}tbody tr:nth-child(even){background:#fcfcfd}
+    .pill{display:inline-block;padding:5px 10px;border-radius:999px;font-size:11px;font-weight:800;border:1px solid #e5e7eb;background:#fff}.footer{margin-top:18px;padding-top:10px;border-top:1px solid var(--line);font-size:11px;color:var(--muted);text-align:right}
+    .detailGrid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px}.detailCard{border:1px solid var(--line);background:#fff;border-radius:16px;padding:12px}.detailCard .k{font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin-bottom:6px}.detailCard .v{font-size:14px;font-weight:700;white-space:pre-wrap;word-break:break-word}
+    @page{size:A4 landscape;margin:12mm}
+    @media print{body{background:#fff}.page{max-width:none;padding:0}.sheet{border:none;box-shadow:none;border-radius:0;padding:0}}
+    @media (max-width:900px){.kpis{grid-template-columns:1fr 1fr}.charts,.detailGrid{grid-template-columns:1fr}.top{flex-direction:column}.meta{text-align:left;min-width:0}}
+  </style>
+</head>
+<body>
+  <div class="page"><div class="sheet"><div class="top"><div class="brand"><img src="${escapeHtml(logoSrc)}" alt="Logo"><div class="title"><h1>${escapeHtml(title)}</h1><div class="sub">Gestão de Propostas • Jairme Spolador Junior</div></div></div><div class="meta"><div><strong>Emitido em:</strong> ${escapeHtml(new Date().toLocaleString("pt-BR"))}</div><div><strong>Total na impressão:</strong> ${escapeHtml(String(totalRegistros || 0))} registros</div></div></div>${bodyHtml}<div class="footer">Relatório gerado automaticamente pelo painel.</div></div></div>
+  <script>window.onload=function(){setTimeout(function(){window.print();},250);};<\/script>
+</body>
+</html>`;
+  }
+
+  function printListaFriendly(){
+    const rows = Array.isArray(window.__lastFilteredRows) ? window.__lastFilteredRows : [];
+    if (!rows.length){ toast("Sem dados no filtro para imprimir.", "warn"); return; }
+    const k = getPrintKpis();
+    const filterText = getPrintFilterLabel();
+    const imgTime = getChartImageSafe(chartTime);
+    const imgStatus = getChartImageSafe(chartStatus);
+    const imgClient = getChartImageSafe(chartClient);
+    const imgUF = getChartImageSafe(chartUF);
+    const tableRows = rows.map(r => {
+      const st = norm(getCell(r, COL.status) ?? "");
+      return `<tr><td>${escapeHtml(norm(getCell(r, COL.id) ?? ""))}</td><td><span class="pill">${escapeHtml(st || "—")}</span></td><td>${escapeHtml(norm(getCell(r, COL.cliente) ?? ""))}</td><td>${escapeHtml(norm(getCell(r, COL.dataProposta) ?? ""))}</td><td>${escapeHtml(norm(getCell(r, COL.cidade) ?? ""))}/${escapeHtml(norm(getCell(r, COL.uf) ?? ""))}</td><td>${escapeHtml(norm(getCell(r, COL.equipamento) ?? ""))}</td><td class="money">${escapeHtml(moneyBR(parseMoney(getCell(r, COL.valorApresentado))))}</td><td>${escapeHtml(norm(getCell(r, COL.dataFechamento) ?? ""))}</td><td class="money">${escapeHtml(moneyBR(parseMoney(getCell(r, COL.valorFechado))))}</td></tr>`;
+    }).join("");
+    const charts = [
+      { title: "Propostas por mês", img: imgTime },
+      { title: "Distribuição por status", img: imgStatus },
+      { title: "Top 10 clientes", img: imgClient },
+      { title: "Top 10 UF", img: imgUF }
+    ].filter(x => x.img).map(x => `<div class="chartCard"><h3>${escapeHtml(x.title)}</h3><img src="${x.img}" alt="${escapeHtml(x.title)}"></div>`).join("");
+    const body = `<div class="filterBox"><div class="label">Filtro aplicado</div><div class="value">${escapeHtml(filterText)}</div></div><div class="kpis"><div class="kpi"><div class="t">Total</div><div class="v">${escapeHtml(k.total)}</div></div><div class="kpi"><div class="t">Apresentado</div><div class="v">${escapeHtml(k.apresentado)}</div></div><div class="kpi"><div class="t">Fechado</div><div class="v">${escapeHtml(k.fechado)}</div></div><div class="kpi"><div class="t">Negociação</div><div class="v">${escapeHtml(k.negociacao)}</div></div><div class="kpi"><div class="t">Conversão</div><div class="v">${escapeHtml(k.conversao)}</div></div></div>${charts ? `<div class="sectionTitle">Visão gráfica</div><div class="charts">${charts}</div>` : ""}<div class="sectionTitle">Lista de propostas</div><div class="tableWrap"><table><thead><tr><th>ID</th><th>Status</th><th>Cliente</th><th>Data proposta</th><th>Cidade/UF</th><th>Equipamento</th><th class="money">Apresentada (R$)</th><th>Fechamento</th><th class="money">Fechada (R$)</th></tr></thead><tbody>${tableRows}</tbody></table></div>`;
+    const w = window.open("", "_blank", "width=1400,height=900");
+    if (!w){ toast("O navegador bloqueou a janela de impressão. Libere pop-ups.", "warn"); return; }
+    w.document.open(); w.document.write(buildPrintShell("Relatório de Propostas", body, rows.length)); w.document.close();
+  }
+
+  function printCurrentRowFriendly(row){
+    if (!row){ toast("Nenhum registro selecionado para impressão.", "warn"); return; }
+    const body = `<div class="filterBox"><div class="label">Registro selecionado</div><div class="value">ID ${escapeHtml(norm(getCell(row, COL.id) ?? ""))} • ${escapeHtml(norm(getCell(row, COL.cliente) ?? ""))}</div></div><div class="detailGrid"><div class="detailCard"><div class="k">ID</div><div class="v">${escapeHtml(norm(getCell(row, COL.id) ?? ""))}</div></div><div class="detailCard"><div class="k">Status</div><div class="v">${escapeHtml(norm(getCell(row, COL.status) ?? ""))}</div></div><div class="detailCard"><div class="k">Cliente</div><div class="v">${escapeHtml(norm(getCell(row, COL.cliente) ?? ""))}</div></div><div class="detailCard"><div class="k">Data proposta</div><div class="v">${escapeHtml(norm(getCell(row, COL.dataProposta) ?? ""))}</div></div><div class="detailCard"><div class="k">Cidade</div><div class="v">${escapeHtml(norm(getCell(row, COL.cidade) ?? ""))}</div></div><div class="detailCard"><div class="k">UF</div><div class="v">${escapeHtml(norm(getCell(row, COL.uf) ?? ""))}</div></div><div class="detailCard"><div class="k">Equipamento</div><div class="v">${escapeHtml(norm(getCell(row, COL.equipamento) ?? ""))}</div></div><div class="detailCard"><div class="k">Proposta apresentada</div><div class="v">${escapeHtml(moneyBR(parseMoney(getCell(row, COL.valorApresentado))))}</div></div><div class="detailCard"><div class="k">Data fechamento</div><div class="v">${escapeHtml(norm(getCell(row, COL.dataFechamento) ?? ""))}</div></div><div class="detailCard"><div class="k">Proposta fechada</div><div class="v">${escapeHtml(moneyBR(parseMoney(getCell(row, COL.valorFechado))))}</div></div><div class="detailCard" style="grid-column:1 / -1"><div class="k">Detalhes</div><div class="v">${escapeHtml(norm(getCell(row, COL.obs) ?? "")) || "—"}</div></div></div>`;
+    const w = window.open("", "_blank", "width=1100,height=850");
+    if (!w){ toast("O navegador bloqueou a janela de impressão. Libere pop-ups.", "warn"); return; }
+    w.document.open(); w.document.write(buildPrintShell("Ficha da Proposta", body, 1)); w.document.close();
+  }
+
   // Events
   el("btnAplicar").addEventListener("click", ()=>{ rebuildFilterOptions(); apply(); });
   el("btnLimpar").addEventListener("click", clearFilters);
-  el("btnPrintAll").addEventListener("click", printLista);
+  el("btnPrintAll").addEventListener("click", printListaFriendly);
   el("btnSearch").addEventListener("click", apply);
 
   el("btnCalIni").addEventListener("click", ()=>openPicker(el("dtIni")));
@@ -1812,7 +1787,7 @@
   // Modal
   el("btnCloseModal").addEventListener("click", closeModal);
   el("modal").addEventListener("click", (ev)=>{ if(ev.target === el("modal")) closeModal(); });
-  el("btnPrintRow").addEventListener("click", ()=>{ if(currentRowForPrint) window.print(); });
+  el("btnPrintRow").addEventListener("click", ()=>{ if(currentRowForPrint) printCurrentRowFriendly(currentRowForPrint); });
 
   // Tabs
   el("tabBtnDash").addEventListener("click", ()=>setTab("dash"));
